@@ -1,0 +1,23 @@
+# Build files
+*.iml
+.gradle
+/local.properties
+/.idea/
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# Android Studio
+*.iml
+.idea/
+.gradle/
+build/
+gradle/
+gradlew
+gradlew.bat
+
+# Model files (too large for git)
+app/src/main/assets/model-hi/
