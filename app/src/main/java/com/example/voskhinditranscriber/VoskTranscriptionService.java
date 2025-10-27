@@ -299,6 +299,10 @@ public class VoskTranscriptionService {
         }
     }
 
+    private File recordedAudioFile;
+    private FileOutputStream audioOutputStream;
+    private java.util.List<short[]> recordedAudioChunks = new java.util.ArrayList<>();
+
     public void startRecording() {
         if (!isModelReady || recognizer == null) {
             String errorMsg = "Recognizer not initialized. Please wait for model to load.\n\n" +
@@ -314,6 +318,9 @@ public class VoskTranscriptionService {
         if (isRecording) {
             return;
         }
+
+        // Clear previous recording
+        recordedAudioChunks.clear();
 
         int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, 
                 AudioFormat.CHANNEL_IN_MONO, 
@@ -336,6 +343,7 @@ public class VoskTranscriptionService {
         audioRecord.startRecording();
         isRecording = true;
 
+        // Record audio in memory for later transcription
         recognitionThread = new Thread(() -> {
             short[] buffer = new short[bufferSize];
             
@@ -343,15 +351,14 @@ public class VoskTranscriptionService {
                 int numRead = audioRecord.read(buffer, 0, buffer.length);
                 
                 if (numRead > 0) {
-                    if (recognizer.acceptWaveForm(buffer, numRead)) {
-                        String result = recognizer.getResult();
-                        processFinalResult(result);
-                    } else {
-                        String partialResult = recognizer.getPartialResult();
-                        processPartialResult(partialResult);
-                    }
+                    // Store audio data for later transcription
+                    short[] chunk = new short[numRead];
+                    System.arraycopy(buffer, 0, chunk, 0, numRead);
+                    recordedAudioChunks.add(chunk);
                 }
             }
+            
+            Log.d(TAG, "Recording stopped. Total chunks: " + recordedAudioChunks.size());
         });
 
         recognitionThread.start();
@@ -378,10 +385,72 @@ public class VoskTranscriptionService {
             audioRecord = null;
         }
 
-        if (recognizer != null) {
-            String finalResult = recognizer.getFinalResult();
-            processFinalResult(finalResult);
-        }
+        // Now transcribe the recorded audio
+        transcribeRecordedAudio();
+    }
+
+    private void transcribeRecordedAudio() {
+        new Thread(() -> {
+            try {
+                Log.d(TAG, "Starting transcription of recorded audio...");
+                
+                if (recordedAudioChunks.isEmpty()) {
+                    if (listener != null) {
+                        listener.onError("No audio recorded");
+                    }
+                    return;
+                }
+
+                // Create a new recognizer for transcription
+                Recognizer fileRecognizer = new Recognizer(model, SAMPLE_RATE);
+                StringBuilder completeText = new StringBuilder();
+
+                // Process all recorded chunks
+                for (short[] chunk : recordedAudioChunks) {
+                    if (fileRecognizer.acceptWaveForm(chunk, chunk.length)) {
+                        String result = fileRecognizer.getResult();
+                        String text = extractTextFromJson(result);
+                        if (!text.isEmpty()) {
+                            if (completeText.length() > 0) {
+                                completeText.append(" ");
+                            }
+                            completeText.append(text);
+                            Log.d(TAG, "Intermediate result: " + text);
+                        }
+                    }
+                }
+
+                // Get final result
+                String finalResult = fileRecognizer.getFinalResult();
+                String finalText = extractTextFromJson(finalResult);
+                if (!finalText.isEmpty()) {
+                    if (completeText.length() > 0) {
+                        completeText.append(" ");
+                    }
+                    completeText.append(finalText);
+                }
+
+                fileRecognizer.close();
+
+                String fullTranscription = completeText.toString().trim();
+                Log.d(TAG, "Complete transcription: " + fullTranscription);
+
+                if (!fullTranscription.isEmpty() && listener != null) {
+                    listener.onFinalResult(fullTranscription);
+                } else if (listener != null) {
+                    listener.onError("No speech detected in recording");
+                }
+
+                // Clear the recorded chunks
+                recordedAudioChunks.clear();
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error transcribing recorded audio", e);
+                if (listener != null) {
+                    listener.onError("Failed to transcribe: " + e.getMessage());
+                }
+            }
+        }).start();
     }
 
     private void processPartialResult(String jsonResult) {

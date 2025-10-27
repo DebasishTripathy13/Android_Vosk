@@ -88,11 +88,7 @@ public class MainActivity extends AppCompatActivity {
                 transcriptionService.setTranscriptionListener(new VoskTranscriptionService.TranscriptionListener() {
                     @Override
                     public void onPartialResult(String text) {
-                        runOnUiThread(() -> {
-                            statusTextView.setText("🎤 Listening...");
-                            // Show partial result in a lighter color or italic style
-                            transcriptionTextView.setText(completeTranscription.toString() + "\n" + text);
-                        });
+                        // Not used in record mode anymore
                     }
 
                     @Override
@@ -105,6 +101,9 @@ public class MainActivity extends AppCompatActivity {
                                 completeTranscription.append(text);
                                 transcriptionTextView.setText(completeTranscription.toString());
                                 transcriptionCard.setVisibility(View.VISIBLE);
+                                statusTextView.setText("✅ Transcription complete");
+                                progressBar.setVisibility(View.GONE);
+                                uploadButton.setEnabled(true);
                             }
                         });
                     }
@@ -249,8 +248,10 @@ public class MainActivity extends AppCompatActivity {
         transcriptionService.stopRecording();
         isRecording = false;
         updateRecordButton(false);
-        uploadButton.setEnabled(true);
-        statusTextView.setText("✅ Recording stopped");
+        uploadButton.setEnabled(false);
+        statusTextView.setText("🔄 Processing recording...");
+        progressBar.setVisibility(View.VISIBLE);
+        transcriptionCard.setVisibility(View.VISIBLE);
     }
 
     @Override

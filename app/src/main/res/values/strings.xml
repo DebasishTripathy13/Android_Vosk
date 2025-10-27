@@ -15,4 +15,6 @@
     <string name="status_complete">✅ Transcription complete</string>
     <string name="transcription_label">📝 Transcription</string>
     <string name="transcription_placeholder">Your transcribed text will appear here...</string>
+    <string name="made_by">Made with ❤️ by</string>
+    <string name="developer_name">Debasish</string>
 </resources>
